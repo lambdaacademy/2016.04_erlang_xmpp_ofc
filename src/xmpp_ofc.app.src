@@ -5,7 +5,10 @@
   {mod, { xmpp_ofc_app, []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    ofs_handler,
+    of_driver,
+    of_msg_lib
    ]},
   {env,[]},
   {modules, []},
