@@ -134,7 +134,7 @@ terminate_connection(DatapathId, ModsConfig) ->
     MsgTypesToUnsubscribe =
         lists:foldl(fun({Mod, Pid, MsgTypes}, Acc) ->
                             ok = Mod:stop(Pid),
-                            [MsgTypes | Acc]
+                            MsgTypes ++ Acc
                     end, [], ModsConfig),
     unsubscribe(DatapathId, lists:usort(MsgTypesToUnsubscribe)).
 
@@ -149,18 +149,22 @@ handle_message(MsgType, Msg, ModsConfig) ->
                 end, [], ModsConfig).
 
 subscribe(DatapathId, MsgTypes) ->
-    lists:foreach(fun(MsgType) ->
-                          ok = ofs_handler:subscribe(DatapathId,
-                                                     xmpp_ofc_ofsh,
-                                                     MsgType)
-                  end, MsgTypes).
+    lists:foreach(
+      fun(MsgType) ->
+              ofs_handler:subscribe(DatapathId,xmpp_ofc_ofsh, MsgType) 
+      end, MsgTypes).
 
 unsubscribe(DatapathId, MsgTypes) ->
-    lists:foreach(fun(MsgType) ->
-                          ok = ofs_handler:unsubscribe(DatapathId,
-                                                       xmpp_ofc_ofsh,
-                                                       MsgType)
-                  end, MsgTypes).
+    lists:foreach(
+      fun(MsgType) ->
+              case ofs_handler:unsubscribe(DatapathId, xmpp_ofc_ofsh,
+                                           MsgType) of
+                  ok ->
+                      ok;
+                  no_handler ->
+                      ok
+              end
+      end, MsgTypes).
 
 of_send(DatapathId, Messages) ->
     [ofs_handler:send(DatapathId, M) || M <- Messages].
