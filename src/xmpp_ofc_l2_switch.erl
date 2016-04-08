@@ -103,15 +103,14 @@ subscriptions() ->
 
 handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
     FwdTable1  = learn_src_mac_to_port(PacketIn, DatapathId, FwdTable0),
-    {OutPort, FlowMod} =
-        case get_port_for_dst_mac(PacketIn, FwdTable0) of
-            undefined ->
-                flood;
-            PortNo ->
-                {flow_to_dst_mac(PacketIn, PortNo), PortNo}
-        end,
-    {[FlowMod, packet_out(Xid, PacketIn, OutPort)], FwdTable1}.
-
+    case get_port_for_dst_mac(PacketIn, FwdTable0) of
+        undefined ->
+            {[packet_out(Xid, PacketIn, flood)], FwdTable1};
+        PortNo ->
+            {[flow_to_dst_mac(PacketIn, PortNo),
+              packet_out(Xid, PacketIn, PortNo)],
+             PortNo}
+    end.
 
 learn_src_mac_to_port(PacketIn, Dpid, FwdTable0) ->
     [InPort, SrcMac] = packet_in_extract([in_port, src_mac], PacketIn),
