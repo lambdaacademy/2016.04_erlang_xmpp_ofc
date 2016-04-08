@@ -49,7 +49,7 @@ start_link(DatapathId) ->
 
 -spec stop(pid()) -> ok.
 stop(Pid) ->
-    gen_server:terminate(Pid).
+    gen_server:stop(Pid).
 
 -spec handle_message(pid(),
                      {MsgType :: term(),
