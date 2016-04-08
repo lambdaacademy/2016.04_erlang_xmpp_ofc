@@ -142,7 +142,7 @@ handle_message(MsgType, Msg, ModsConfig) ->
     lists:foldl(fun({Mod, Pid, MsgTypes}, Acc) ->
                         case lists:member(MsgType, MsgTypes) of
                             true ->
-                                Mod:handle_messsage(Pid, Msg,  Acc);
+                                Mod:handle_message(Pid, Msg, Acc);
                             false ->
                                 Acc
                         end
