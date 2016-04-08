@@ -14,4 +14,4 @@ handle_message(Msg, #state{switch_dpid = Dpid}) ->
     xmpp_ofc_gen_switch:handle_message(Dpid, Msg).
 
 terminate(#state{switch_dpid = Dpid}) ->
-    xmpp_ofc_gen_switch_logic:terminate_connection(Dpid).
+    xmpp_ofc_gen_switch:terminate_connection(Dpid).
