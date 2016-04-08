@@ -1,7 +1,5 @@
 -module(xmpp_ofc_gen_switch).
 -behaviour(gen_server).
--define(SERVER, ?MODULE).
--define(DEFAULT_MODULES, xmpp_ofc_l2_switch).
 
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -31,6 +29,9 @@
 -record(state, {enabled_modules :: [Mod :: atom()],
                 switches_config :: switches_config()}).
 -type state() :: #state{}.
+
+-define(SERVER, ?MODULE).
+-define(DEFAULT_MODULES, [xmpp_ofc_l2_switch]).
 
 
 %% ------------------------------------------------------------------
