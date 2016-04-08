@@ -109,7 +109,7 @@ handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
         PortNo ->
             {[flow_to_dst_mac(PacketIn, PortNo),
               packet_out(Xid, PacketIn, PortNo)],
-             PortNo}
+             FwdTable1}
     end.
 
 learn_src_mac_to_port(PacketIn, Dpid, FwdTable0) ->
