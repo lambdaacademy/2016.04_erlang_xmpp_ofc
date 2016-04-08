@@ -94,7 +94,7 @@ handle_cast({handle_message, DatapathId, {MsgType, _,  _} = Msg},
     of_send(DatapathId, OFMessages),
     lager:debug("Switch ~p sent OF messages: ~p", [DatapathId,
                                                    OFMessages]),
-    {noeply, State};
+    {noreply, State};
 
 handle_cast(_Request, State) ->
     {noreply, State}.
