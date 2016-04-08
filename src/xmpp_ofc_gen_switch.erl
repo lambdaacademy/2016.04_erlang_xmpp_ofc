@@ -124,7 +124,7 @@ open_connection(DatapathId, EnabledMods) ->
                   {ok, Pid, MsgTypes} = Mod:start_link(DatapathId),
                   {
                     [{Mod, Pid, MsgTypes} | ModsCfgAcc],
-                    [MsgTypes | MsgTypesAcc]
+                    MsgTypes ++ MsgTypesAcc
                   }
           end, {[], []}, EnabledMods),
     subscribe(DatapathId, lists:usort(MsgTypesToSubscribe)),
