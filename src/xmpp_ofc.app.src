@@ -1,0 +1,16 @@
+{application, xmpp_ofc,
+ [{description, "XMPP OpenFlow Controller"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, { xmpp_ofc_app, []}},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+  
+  {maintainers, []},
+  {licenses, []},
+  {links, []}
+ ]}.

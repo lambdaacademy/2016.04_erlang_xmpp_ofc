@@ -1,0 +1,1 @@
+os:putenv("EXOMETER_PACKAGES", "(minimal)"), CONFIG.

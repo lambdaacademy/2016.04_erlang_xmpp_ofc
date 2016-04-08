@@ -1,0 +1,3 @@
+:name "xmpp_ofc"
+:node-sname "xmpp_ofc_edts"
+:lib-dirs '("_build/test/lib" "_build/default/lib")
