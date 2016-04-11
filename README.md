@@ -1,4 +1,4 @@
-xc - XMPP Controller
+xmpp_ofc - XMPP Controller
 =====
 
 An OTP application
@@ -6,4 +6,9 @@ An OTP application
 Build
 -----
 
-    $ rebar3 compile
+$ rebar3 compile
+
+## Architecture ##
+
+![alt](img/arch.png)
+
