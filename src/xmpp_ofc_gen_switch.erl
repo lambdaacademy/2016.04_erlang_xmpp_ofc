@@ -32,6 +32,9 @@
 
 -define(SERVER, ?MODULE).
 -define(DEFAULT_MODULES, [xmpp_ofc_l2_switch]).
+-define(EXO_SWITCHES_CNT, [counters, switches]).
+-define(EXO_OF_MESSAGES_RECEIVED, [counters, packet_ins]).
+-define(EXO_OF_MESSAGES_SENT, [counters, of_messages_sent]).
 
 
 %% ------------------------------------------------------------------
@@ -61,6 +64,7 @@ handle_message(DatapathId, Msg) ->
 %% ------------------------------------------------------------------
 
 init([]) ->
+    init_exometer(),
     {ok, #state{enabled_modules = ?DEFAULT_MODULES,
                 switches_config = #{}}}.
 
@@ -117,7 +121,26 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
+init_exometer() ->
+    Metrics =
+        [{?EXO_SWITCHES_CNT, counter, [value], 10000},
+         {?EXO_OF_MESSAGES_RECEIVED, spiral, [one, count], 10000},
+         {?EXO_OF_MESSAGES_SENT, spiral, [one, count], 10000}],
+    %% spiral: sum of values reported withing given time span
+    [ok = init_exometer_graphite_metrics(Name,
+                                         Type,
+                                         DataPoints,
+                                         ReportInterval)
+     || {Name, Type, DataPoints, ReportInterval} <- Metrics].
+
+init_exometer_graphite_metrics(
+  Name, Type, DataPoints, ReportInterval) ->
+    exometer:new(Name, Type),
+    exometer_report:subscribe(exometer_report_graphite,
+                              Name, DataPoints, ReportInterval).
+
 open_connection(DatapathId, EnabledMods) ->
+    exometer:update(?EXO_SWITCHES_CNT, 1),
     {ModsCfg, MsgTypesToSubscribe} =
         lists:foldl(
           fun(Mod, {ModsCfgAcc, MsgTypesAcc}) ->
@@ -131,6 +154,7 @@ open_connection(DatapathId, EnabledMods) ->
     lists:reverse(ModsCfg).
 
 terminate_connection(DatapathId, ModsConfig) ->
+    exometer:update(?EXO_SWITCHES_CNT, -1),
     MsgTypesToUnsubscribe =
         lists:foldl(fun({Mod, Pid, MsgTypes}, Acc) ->
                             ok = Mod:stop(Pid),
@@ -139,6 +163,7 @@ terminate_connection(DatapathId, ModsConfig) ->
     unsubscribe(DatapathId, lists:usort(MsgTypesToUnsubscribe)).
 
 handle_message(MsgType, Msg, ModsConfig) ->
+    exometer:update(?EXO_OF_MESSAGES_RECEIVED, 1),
     lists:foldl(fun({Mod, Pid, MsgTypes}, Acc) ->
                         case lists:member(MsgType, MsgTypes) of
                             true ->
@@ -167,4 +192,5 @@ unsubscribe(DatapathId, MsgTypes) ->
       end, MsgTypes).
 
 of_send(DatapathId, Messages) ->
+    exometer:update(?EXO_OF_MESSAGES_SENT, 1),
     [ofs_handler:send(DatapathId, M) || M <- Messages].
