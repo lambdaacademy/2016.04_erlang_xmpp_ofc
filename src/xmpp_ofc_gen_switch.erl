@@ -33,7 +33,7 @@
 -define(SERVER, ?MODULE).
 -define(DEFAULT_MODULES, [xmpp_ofc_l2_switch]).
 -define(EXO_SWITCHES_CNT, [counters, switches]).
--define(EXO_OF_MESSAGES_RECEIVED, [counters, packet_ins]).
+-define(EXO_OF_MESSAGES_RECEIVED, [counters, of_messages_received]).
 -define(EXO_OF_MESSAGES_SENT, [counters, of_messages_sent]).
 
 
