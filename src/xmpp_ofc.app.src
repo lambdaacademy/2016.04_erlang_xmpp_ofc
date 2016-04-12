@@ -8,7 +8,8 @@
     stdlib,
     ofs_handler,
     of_driver,
-    of_msg_lib
+    of_msg_lib,
+    exometer
    ]},
   {env,[]},
   {modules, []},
