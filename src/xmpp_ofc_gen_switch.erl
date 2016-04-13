@@ -141,16 +141,19 @@ init_exometer_graphite_metrics(
 
 open_connection(DatapathId, EnabledMods) ->
     exometer:update(?EXO_SWITCHES_CNT, 1),
-    {ModsCfg, MsgTypesToSubscribe} =
+    {ModsCfg, MsgTypesToSubscribe, InitOFMessages} =
         lists:foldl(
-          fun(Mod, {ModsCfgAcc, MsgTypesAcc}) ->
-                  {ok, Pid, MsgTypes} = Mod:start_link(DatapathId),
+          fun(Mod, {ModsCfgAcc, MsgTypesAcc, OFMessagesAcc}) ->
+                  {ok, Pid, MsgTypes, InitOFMessages} =
+                      Mod:start_link(DatapathId),
                   {
                     [{Mod, Pid, MsgTypes} | ModsCfgAcc],
-                    MsgTypes ++ MsgTypesAcc
+                    MsgTypes ++ MsgTypesAcc,
+                    InitOFMessages ++ OFMessagesAcc
                   }
-          end, {[], []}, EnabledMods),
+          end, {[], [], []}, EnabledMods),
     subscribe(DatapathId, lists:usort(MsgTypesToSubscribe)),
+    of_send(DatapathId, InitOFMessages),
     lists:reverse(ModsCfg).
 
 terminate_connection(DatapathId, ModsConfig) ->

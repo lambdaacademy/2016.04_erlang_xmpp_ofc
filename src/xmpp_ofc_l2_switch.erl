@@ -45,7 +45,7 @@
 -spec start_link(binary()) -> {ok, pid()} | ignore | {error, term()}.
 start_link(DatapathId) ->
     {ok, Pid} = gen_server:start_link(?MODULE, [DatapathId], []),
-    {ok, Pid, subscriptions()}.
+    {ok, Pid, subscriptions(), [init_flow_mod()]}.
 
 -spec stop(pid()) -> ok.
 stop(Pid) ->
@@ -67,12 +67,17 @@ init([DatapathId]) ->
     {ok, #state{datapath_id = DatapathId, fwd_table = #{}}}.
 
 
-handle_call({handle_message, {packet_in, _, _} = Msg, CurrOFMesssages},
+handle_call({handle_message, {packet_in, _, MsgBody} = Msg, CurrOFMesssages},
             _From, #state{datapath_id = Dpid,
                           fwd_table = FwdTable0} = State) ->
-    {OFMessages, FwdTable1} = handle_packet_in(Msg, Dpid, FwdTable0),
-    {reply, OFMessages ++ CurrOFMesssages,
-     State#state{fwd_table = FwdTable1}}.
+    case packet_in_extract(reason, MsgBody) of
+        action ->
+            {OFMessages, FwdTable1} = handle_packet_in(Msg, Dpid, FwdTable0),
+            {reply, OFMessages ++ CurrOFMesssages,
+             State#state{fwd_table = FwdTable1}};
+        _ ->
+            {reply, CurrOFMesssages, State}
+    end.
 
 
 handle_cast(_Request, State) ->
@@ -100,6 +105,17 @@ code_change(_OldVsn, State, _Extra) ->
 
 subscriptions() ->
     [packet_in].
+
+init_flow_mod() ->
+    Matches = [],
+    Instructions = [{apply_actions, [{output, controller, no_buffer}]}],
+    FlowOpts = [{table_id, 0}, {priority, 10},
+                {idle_timeout, 0},
+                {idle_timeout, 0},
+                {cookie, <<0,0,0,0,0,0,0,1>>},
+                {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
+    of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
+
 
 handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
     FwdTable1  = learn_src_mac_to_port(PacketIn, DatapathId, FwdTable0),
@@ -152,7 +168,8 @@ packet_out(Xid, PacketIn, OutPort) ->
     {InPort, BufferIdOrPacketPortion} =
         case packet_in_extract(buffer_id, PacketIn) of
             no_buffer ->
-                packet_in_extract([in_port, data], PacketIn);
+                list_to_tuple(packet_in_extract([in_port, data],
+                                                PacketIn));
             BufferId when is_integer(BufferId) ->
                 {packet_in_extract(in_port, PacketIn), BufferId}
         end,
@@ -176,7 +193,9 @@ packet_in_extract(in_port, PacketIn) ->
 packet_in_extract(buffer_id, PacketIn) ->
     proplists:get_value(buffer_id, PacketIn);
 packet_in_extract(data, PacketIn) ->
-    proplists:get_value(data, PacketIn).
+    proplists:get_value(data, PacketIn);
+packet_in_extract(reason, PacketIn) ->
+    proplists:get_value(reason, PacketIn).
 
 format_mac(MacBin) ->
     Mac0 = [":" ++ integer_to_list(X, 16) || <<X>> <= MacBin],
