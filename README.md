@@ -99,3 +99,51 @@ handle_message(MsgType, Msg, ModsConfig) ->
                 end, [], ModsConfig).
 
 ```
+
+* updates metrics that are sent to graphite
+
+
+### Controller Modules
+
+#### API
+
+```erlang
+%% Starts the module and returns its pid, subscriptions, and initial OpenFlow messages that are to be sent to the contoller
+start_link(DatapathId) ->  {ok, Pid, subscriptions(), init_of_messages()}
+
+%% Stops the module
+stop(Pid) -> ok
+
+%% Called when a meesage that this module have subscribed to is received by the controller
+%% Pid is the module Pid, the Msg is the message that was delivered and the OFMessages is a list of all the OpenFlow messages that are going to be sent to the controller and that were returned from the other modules.
+%% This functions is epxected to return the updated list of the OpenFlow messages.
+-spec handle_message(pid(),
+                     {MsgType :: term(),
+                      Xid :: term(),
+                      MsgBody :: [tuple()]},
+                     [ofp_message()]) -> [ofp_message()].
+handle_message(Pid, Msg, OFMessages) -> [UpdatedOFMessage]
+
+```
+
+#### Description
+
+* A controller module provides a set of functionality to be applied on the network
+* It subscribtes to the messages from the switch (like packet-in)
+* When a messages that it has subscribed to is recived by the controller it is passed to the Module's handle_message/4 callback which in turn adds OpenFlow messages to be sent down to the switch
+* `xmpp_ofc_l2_switch` is a module implementing basic MAC-learning switch functionality
+   * it subscribes to packet-in messages
+   * on receiving such message it builds up a forwarding table and send appropriate Flow-Mods down to the switch
+```erlang
+flow_to_dst_mac(PacketIn, OutPort) ->
+    [InPort, DstMac] = packet_in_extract([in_port, dst_mac], PacketIn),
+    Matches = [{in_port, InPort}, {eth_dst, DstMac}],
+    Instructions = [{apply_actions, [{output, OutPort, no_buffer}]}],
+    FlowOpts = [{table_id, 0}, {priority, 100},
+                {idle_timeout, ?FM_TIMEOUT_S(idle)},
+                {idle_timeout, ?FM_TIMEOUT_S(hard)},
+                {cookie, <<0,0,0,0,0,0,0,10>>},
+                {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
+    of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
+
+```
