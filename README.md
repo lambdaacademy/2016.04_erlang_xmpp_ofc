@@ -342,3 +342,62 @@ cookie=0xa, duration=281.905s, table=0, n_packets=4105, n_bytes=628898, idle_tim
 ### See the stats of the controller in graphite
 
 ![alt](img/xmpp_ofc_graphite.png)
+
+### Task: Simple Intrusion Detections System (Simple IDS)
+
+The idea is to implement another module, the same way as `xmmp_ofc_l2_switch` providing a functionality of limiting the rate of messages sent by a particular client.
+
+##### Assumptions
+
+* Providing you work with the [2016.04_erlang_env](https://github.com/lambdaacademy/2016.04_erlang_env
+), the XMPP server is always on port
+* Initial Flow-Mod (`start_link/1` callback) should match on all XMPP messages and its priority should be higher than a default Flow-Mod capturing not-matched packtes
+```erlang
+Matches = [{eth_type, 16#0800}, {ip_proto, <<6>>}, {tcp_dst, <<5222:16>>}],
+    Instructions = [{apply_actions, [{output, controller, no_buffer}]}],
+    FlowOpts = [{table_id, 0}, {priority, 150},
+                {idle_timeout, 0},
+                {idle_timeout, 0},
+                {cookie, <<0,0,0,0,0,0,0,150>>},
+                {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
+    of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).    
+```
+* This module should subscribe to *packet-in* messages and when they are delivered (`handle_message/3` callback) check whether the **packet-in** was sent by matching on the initial Flow-Mod (for example by checking the cookie that is the same in the Flow-Mod that triggered the packet-in and in the packet in itself; checking the port number should work too)
+* Based on the packet in, the module should sent another Flow-Mod to allow subsequent packets of this flow
+```erlang
+handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
+    [IpSrc, TCPSrc] = packet_in_extract([ip_src, tcp_src], PacketIn),
+    Matches = [{eth_type, 16#0800},
+               {ip_src, IpSrc},
+               {ip_proto, <<6>>},
+               {tcp_src, TCPSrc},
+               {tcp_dst, <<5222:16>>}],
+    Instructions = [{apply_actions, [{output, 1, no_buffer}]}],
+    FlowOpts = [{table_id, 0}, {priority, 150},
+                {idle_timeout, ?FM_TIMEOUT_S(idle)},
+                {idle_timeout, ?FM_TIMEOUT_S(hard)},
+                {cookie, <<0,0,0,0,0,0,0,200>>},
+                {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
+    FM = of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts),
+    PO = packet_out(Xid, PacketIn, 1),
+    {[FM, PO], FwdTable0}.
+```
+* This module should regulary check the statistics of this Flow-Mod and compute whether a particualr threshold was exceeded (for example let's say we allow only 100 packets/min). If the limit is reached the module should sent blocking Flow-Mod (the drop action):
+```erlang
+handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
+    [IpSrc, TCPSrc] = packet_in_extract([ip_src, tcp_src], PacketIn),
+    Matches = [{eth_type, 16#0800},
+               {ip_src, IpSrc},
+               {ip_proto, <<6>>},
+               {tcp_src, TCPSrc},
+               {tcp_dst, <<5222:16>>}],
+    Instructions = [{apply_actions, [drop]}],
+    FlowOpts = [{table_id, 0}, {priority, 150},
+                {idle_timeout, ?FM_TIMEOUT_S(idle)},
+                {idle_timeout, ?FM_TIMEOUT_S(hard)},
+                {cookie, <<0,0,0,0,0,0,0,200>>},
+                {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
+    FM = of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts),
+    PO = packet_out(Xid, PacketIn, 1),
+    {[FM, PO], FwdTable0}.
+```
