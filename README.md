@@ -1,5 +1,6 @@
 # xmpp_ofc - XMPP Controller
 
+
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-generate-toc again -->
 **Table of Contents**
 
@@ -32,10 +33,12 @@
         - [Clone the controller, and install it](#clone-the-controller-and-install-it)
         - [See the switch forwarding table](#see-the-switch-forwarding-table)
         - [See the stats of the controller in graphite](#see-the-stats-of-the-controller-in-graphite)
-        - [Task: Simple Intrusion Detections System (Simple IDS)](#task-simple-intrusion-detections-system-simple-ids)
-            - [-](#-)
+    - [Task: Simple Intrusion Detections System (Simple IDS)](#task-simple-intrusion-detections-system-simple-ids)
+        - [Assumptions](#assumptions)
+        - [TODO](#todo)
 
 <!-- markdown-toc end -->
+
 
 
 ###
