@@ -1,27 +1,31 @@
-xmpp_ofc - XMPP Controller
-=====
-
-An OTP application
+# xmpp_ofc - XMPP Controller
 
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-generate-toc again -->
 **Table of Contents**
 
 - [xmpp_ofc - XMPP Controller](#xmppofc---xmpp-controller)
-    - [Build](#build)
+    - [-](#-)
     - [References](#references)
         - [-](#-)
         - [OTP](#otp)
         - [OpenFlow](#openflow)
     - [Architecture](#architecture)
-        - [xmpp_ofsh](#xmppofsh)
+        - [xmpp_ofsh](#xmpp_ofsh)
             - [API](#api)
             - [Functionalities](#functionalities)
-        - [xmpp_ofc_gen_switch](#xmppofcgenswitch)
+        - [xmpp_ofc_gen_switch](#xmpp_ofc_gen_switch)
             - [API](#api)
             - [Functionalities](#functionalities)
         - [Controller Modules](#controller-modules)
             - [API](#api)
             - [Description](#description)
+            - [Implementation of an example Controller Module](#implementation-of-an-example-controller-module)
+                - [MAC-Learning switch algorithm](#mac-learning-switch-algorithm)
+                - [Starting the Module](#starting-the-module)
+                - [Handling a message](#handling-a-message)
+    - [Sequence Diagrams](#sequence-diagrams)
+        - [Switch Connection](#switch-connection)
+        - [OpenFlow message from a switch](#openflow-message-from-a-switch)
     - [Walthrough](#walthrough)
         - [Check the swtich forwarding table](#check-the-swtich-forwarding-table)
         - [Verify the number of session in the MIM server](#verify-the-number-of-session-in-the-mim-server)
@@ -34,8 +38,7 @@ An OTP application
 <!-- markdown-toc end -->
 
 
-Build
------
+###
 
 $ rebar3 compile
 
