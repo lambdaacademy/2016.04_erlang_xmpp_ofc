@@ -3,6 +3,37 @@ xmpp_ofc - XMPP Controller
 
 An OTP application
 
+<!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-generate-toc again -->
+**Table of Contents**
+
+- [xmpp_ofc - XMPP Controller](#xmppofc---xmpp-controller)
+    - [Build](#build)
+    - [References](#references)
+        - [-](#-)
+        - [OTP](#otp)
+        - [OpenFlow](#openflow)
+    - [Architecture](#architecture)
+        - [xmpp_ofsh](#xmppofsh)
+            - [API](#api)
+            - [Functionalities](#functionalities)
+        - [xmpp_ofc_gen_switch](#xmppofcgenswitch)
+            - [API](#api)
+            - [Functionalities](#functionalities)
+        - [Controller Modules](#controller-modules)
+            - [API](#api)
+            - [Description](#description)
+    - [Walthrough](#walthrough)
+        - [Check the swtich forwarding table](#check-the-swtich-forwarding-table)
+        - [Verify the number of session in the MIM server](#verify-the-number-of-session-in-the-mim-server)
+        - [Clone the controller, and install it](#clone-the-controller-and-install-it)
+        - [See the switch forwarding table](#see-the-switch-forwarding-table)
+        - [See the stats of the controller in graphite](#see-the-stats-of-the-controller-in-graphite)
+        - [Task: Simple Intrusion Detections System (Simple IDS)](#task-simple-intrusion-detections-system-simple-ids)
+            - [-](#-)
+
+<!-- markdown-toc end -->
+
+
 Build
 -----
 
@@ -32,6 +63,37 @@ $ rebar3 compile
 ## Architecture ##
 
 ![alt](img/arch.png)
+
+### xmpp_ofsh
+
+`ofsh` stands for OpenFlow Switch handler. It's a callback module called by one of the libraries of the LOOM controller: `ofs_handler`. It is configured in the [sys.config file](config/sys.conifg):
+
+```erlang
+...
+ {ofs_handler,[
+               {callback_module,xmpp_ofc_ofsh}, %% <--- HERE
+               {peer,"localhost"},
+               {callback_opts,[]}
+              ]},
+...
+```
+
+#### API
+
+```erlang
+@doc Called whenever a new switch connects to the controller
+init(Mode, Ip, DatapathId, Features, Version, Connection, Options) -> {ok, SwitchState}.
+
+@doc Called when a switch sends a message to the controller that it subscribed to
+handle_message(Msg, SwitchState) -> ok.
+
+@doc Called when a switch disconnects from the controller.
+terminate(SwitchState) -> ok.
+```
+
+#### Functionalities
+
+This module connects the LOOM library with the logic implemented in the rest of the modules.
 
 ### xmpp_ofc_gen_switch
 
