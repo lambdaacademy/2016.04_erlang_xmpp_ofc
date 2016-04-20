@@ -557,15 +557,15 @@ cookie=0xa, duration=281.905s, table=0, n_packets=4105, n_bytes=628898, idle_tim
 
 ![alt](img/xmpp_ofc_graphite.png)
 
-### Task: Simple Intrusion Detections System (Simple IDS)
+
+## Task: Simple Intrusion Detections System (Simple IDS)
 
 The idea is to implement another module, the same way as `xmmp_ofc_l2_switch` providing a functionality of limiting the rate of messages sent by a particular client.
 
-##### Assumptions
+### Assumptions
 
-* Providing you work with the [2016.04_erlang_env](https://github.com/lambdaacademy/2016.04_erlang_env
-), the XMPP server is always on port
-* Initial Flow-Mod (`start_link/1` callback) should match on all XMPP messages and its priority should be higher than a default Flow-Mod capturing not-matched packtes
+* Providing you work with the [2016.04_erlang_env](https://github.com/lambdaacademy/2016.04_erlang_env), the XMPP server is always attached the port no 1 of the switch
+* Initial `FlowMod` (`start_link/1` callback) should match all the XMPP messages and its priority should be higher than a default `FlowMod` capturing not-matched packets:
 ```erlang
 Matches = [{eth_type, 16#0800}, {ip_proto, <<6>>}, {tcp_dst, <<5222:16>>}],
     Instructions = [{apply_actions, [{output, controller, no_buffer}]}],
@@ -576,8 +576,8 @@ Matches = [{eth_type, 16#0800}, {ip_proto, <<6>>}, {tcp_dst, <<5222:16>>}],
                 {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
     of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).    
 ```
-* This module should subscribe to *packet-in* messages and when they are delivered (`handle_message/3` callback) check whether the **packet-in** was sent by matching on the initial Flow-Mod (for example by checking the cookie that is the same in the Flow-Mod that triggered the packet-in and in the packet in itself; checking the port number should work too)
-* Based on the packet in, the module should sent another Flow-Mod to allow subsequent packets of this flow
+* This module should subscribe to `PacketIn` messages and when they are delivered (`handle_message/3` callback) check whether the `PacketIn` was sent by matching on the initial `FlowMod` (for example by checking the cookie that is the same in both the `FlowMod` that triggered the `PacketIn` and in the message in itself; checking the TCP destination port number should work too as we can assume that there is only one `FlowEntry` in the switch sending XMPP packet to the controller)
+* Based on the `PacketIn` message, the module should sent another `FlowMod` to allow subsequent packets of this traffic flow to reach the XMPP server:
 ```erlang
 handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
     [IpSrc, TCPSrc] = packet_in_extract([ip_src, tcp_src], PacketIn),
@@ -589,14 +589,17 @@ handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
     Instructions = [{apply_actions, [{output, 1, no_buffer}]}],
     FlowOpts = [{table_id, 0}, {priority, 150},
                 {idle_timeout, ?FM_TIMEOUT_S(idle)},
-                {idle_timeout, ?FM_TIMEOUT_S(hard)},
+                {hard_timeout, ?FM_TIMEOUT_S(hard)},
                 {cookie, <<0,0,0,0,0,0,0,200>>},
                 {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
     FM = of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts),
     PO = packet_out(Xid, PacketIn, 1),
     {[FM, PO], FwdTable0}.
 ```
-* This module should regulary check the statistics of this Flow-Mod and compute whether a particualr threshold was exceeded (for example let's say we allow only 100 packets/min). If the limit is reached the module should sent blocking Flow-Mod (the drop action):
+
+> You can see that the match here specifies not only the XMPP port but all the headers in the lower layers of the OSI model (i.e.: `eth_type`, `ip_src`, `ip_proto`, `tcp_src`). It is because matching on the TCP destination port has some prerequisites about which you can read in the 7.2.3.7 of the [OpenFlow documentation][1].
+
+* This module should regularly check the statistics/counters of the `FlowEntries` for the particular XMPP connections and decide whether a specified threshold was exceeded (for example let's say we allow only 100 packets/min). If the limit is reached this Controller Module should send blocking `FlowMod` (the action list empty which indicates dropping a packet):
 ```erlang
 handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
     [IpSrc, TCPSrc] = packet_in_extract([ip_src, tcp_src], PacketIn),
@@ -605,13 +608,24 @@ handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
                {ip_proto, <<6>>},
                {tcp_src, TCPSrc},
                {tcp_dst, <<5222:16>>}],
-    Instructions = [{apply_actions, [drop]}],
+    Instructions = [{apply_actions, []}],
     FlowOpts = [{table_id, 0}, {priority, 150},
                 {idle_timeout, ?FM_TIMEOUT_S(idle)},
-                {idle_timeout, ?FM_TIMEOUT_S(hard)},
+                {hard_timeout, ?FM_TIMEOUT_S(hard)},
                 {cookie, <<0,0,0,0,0,0,0,200>>},
                 {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
     FM = of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts),
     PO = packet_out(Xid, PacketIn, 1),
     {[FM, PO], FwdTable0}.
 ```
+
+> To read more about actions check 5.12 in the [OpenFlow documentation][1].
+
+[1]: https://www.opennetworking.org/images/stories/downloads/sdn-resources/onf-specifications/openflow/openflow-spec-v1.3.2.pdf
+
+
+
+### TODO
+
+- [ ] Add the diagram depicting the simple IDS algorithm
+- [ ] Add the OF message description for checking the counters of the particular XMPP clients `FlowEntries`
