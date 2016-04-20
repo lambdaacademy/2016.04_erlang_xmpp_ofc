@@ -194,11 +194,11 @@ handle_message(Pid, Msg, OFMessages) -> [UpdatedOFMessage]
 #### Description
 
 * A controller module provides a set of functionality to be applied on the network
-* It subscribtes to the messages from the switch (like packet-in)
-* When a messages that it has subscribed to is recived by the controller it is passed to the Module's handle_message/4 callback which in turn adds OpenFlow messages to be sent down to the switch
+* It subscribes to the messages from the switch (like packet-in)
+* When a messages that it has subscribed to is received by the controller it is passed to the Module's `handle_message/4` callback which in turn adds OpenFlow messages to be sent down to the switch
 * `xmpp_ofc_l2_switch` is a module implementing basic MAC-learning switch functionality
-   * it subscribes to packet-in messages
-   * on receiving such message it builds up a forwarding table and send appropriate Flow-Mods down to the switch
+   * it subscribes to `PacketIn` messages
+   * on receiving such message it builds up a forwarding table and send appropriate `FlowMods` down to the switch
 ```erlang
 flow_to_dst_mac(PacketIn, OutPort) ->
     [InPort, DstMac] = packet_in_extract([in_port, dst_mac], PacketIn),
@@ -206,7 +206,7 @@ flow_to_dst_mac(PacketIn, OutPort) ->
     Instructions = [{apply_actions, [{output, OutPort, no_buffer}]}],
     FlowOpts = [{table_id, 0}, {priority, 100},
                 {idle_timeout, ?FM_TIMEOUT_S(idle)},
-                {idle_timeout, ?FM_TIMEOUT_S(hard)},
+                {hard_timeout, ?FM_TIMEOUT_S(hard)},
                 {cookie, <<0,0,0,0,0,0,0,10>>},
                 {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
     of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
@@ -249,11 +249,11 @@ init_flow_mod() ->
     of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
 ```
 This `FlowMod` will result in a `FlowEntry` being installed in the switch that:
-* will match any incoming packet - because the `Matches` in an empty list which wildcards all the headers in a packet
-* will be install in the table number 0
-* will be in the switch forever (`{idle,hard}_timeout`)
-* will have the priority of 10 (an incoming packet will be tried to match a `FlowEntry` with the highest priority first; once a entry is matched its actions are executed an the no more `FlowEntries` are checked)
-* will send the while matching packets to the controller (`no_buffer` indicates the the whole original packet will be included in the `PacketIn` message)
+* will match any incoming packet - because the `Matches` is an empty list which wildcards all the headers in a packet
+* will be installed in the table number 0
+* will be in the switch forever (`idle_timeout` and `hard_timeout`)
+* will have the priority of 10 (an incoming packet will be tried to match a `FlowEntry` with the highest priority first; once a entry is matched its actions are executed and no more `FlowEntries` are checked)
+* will send the matching packets to the controller (`no_buffer` indicates the the whole original packet will be included in the `PacketIn` message)
 
 > Check the [OpenFlow documentation](https://www.opennetworking.org/images/stories/downloads/sdn-resources/onf-specifications/openflow/openflow-spec-v1.3.2.pdf) for more information, especially,
 > 5.1, 5.2, 5.3, 5.4 and 7.3.4.1.
@@ -304,7 +304,7 @@ where the `Xid` is the message identifier and the body is a property list:
 
 What is interesting for us is the `reason` which says why the `PacketIn` message was sent from the switch. In our case, the reason is `action` which means that the message was triggered as a result of an action in the `FlowEntry` - the one installed in the switch just after the Module started (the *initial* `FlowMod`). Apart from that, we will have to look into the `data` field that contains the original packet. It is because of the following:
 * we want to learn the source MAC-address -> Port Number mapping;
-* we need to extract the destination MAC-address to see whether we know where to send the packet. All this is accomplished in the `handle_packet_in/3` functions:
+* we need to extract the destination MAC-address to see whether we know where to send the packet. All this is accomplished in the `handle_packet_in/3` function:
 
 ```erlang
 handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
@@ -323,7 +323,7 @@ According to the algorithm presented in the previous section, if the port for th
 
 However, if the destination port is known, the switch constructs the `FlowMod` so that `FlowEntry` is installed in the switch and all the subsequent packets in the traffic flow will be served according to it. What's more, the `PacketOut` message is sent too so that the first packet of this flow (the one from the `PacketIn`) is served as well.
 
-The `FlowMod` that is sent down to the switch look like the one below:
+The `FlowMod` that is sent down to the switch looks like the one below:
 ```erlang
 flow_to_dst_mac(PacketIn, OutPort) ->
     [InPort, DstMac] = packet_in_extract([in_port, dst_mac], PacketIn),
@@ -337,7 +337,7 @@ flow_to_dst_mac(PacketIn, OutPort) ->
     of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
 ```
 
-What is important here is that this `FlowMod` creates an entry that will match all the packets arriving at the `InPort` destined to the `DstMac` address (that we learnt from the `PacketIn` message). We also set timers this time so that the entry is deleted after some time (in the switch, but we also schedule removal of the MAC address -> Port Number mapping in the controller - see `learn_src_mac_to_port/3`). And the last important thing is that we set the priority to 100 which is higher that what we have in the initial `FlowMod`.
+What is important here is that this `FlowMod` creates an entry that will match all the packets arriving at the `InPort` destined to the `DstMac` address (that we learnt from the `PacketIn` message). We also set timers this time so that the entry is deleted after some time (in the switch, but we also schedule removal of the MAC address -> Port Number mapping in the controller - see `learn_src_mac_to_port/3`). And the last important thing is that we set the priority to 100 which is higher than what we have in the initial `FlowMod`.
 
 Finally, when you look back what is returned from the `handle_packet_in/3`, it returns the updated forwarding table and OpenFlow messages that the Controller Module wants to be pushed down to the switch. These messages are merged with the ones produces by other Controller Modules (however, in our case the `xmpp_ofc_l2_switch` is the first one so there're no previous OpenFlow messages):
 
