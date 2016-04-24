@@ -583,9 +583,9 @@ Matches = [{eth_type, 16#0800}, {ip_proto, <<6>>}, {tcp_dst, <<5222:16>>}],
 * Based on the `PacketIn` message, the module should sent another `FlowMod` to allow subsequent packets of this traffic flow to reach the XMPP server:
 ```erlang
 handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
-    [IpSrc, TCPSrc] = packet_in_extract([ip_src, tcp_src], PacketIn),
+    [IpSrc, TCPSrc] = packet_in_extract([ipv4_src, tcp_src], PacketIn),
     Matches = [{eth_type, 16#0800},
-               {ip_src, IpSrc},
+               {ipv4_src, IpSrc},
                {ip_proto, <<6>>},
                {tcp_src, TCPSrc},
                {tcp_dst, <<5222:16>>}],
@@ -600,14 +600,14 @@ handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
     {[FM, PO], FwdTable0}.
 ```
 
-> You can see that the match here specifies not only the XMPP port but all the headers in the lower layers of the OSI model (i.e.: `eth_type`, `ip_src`, `ip_proto`, `tcp_src`). It is because matching on the TCP destination port has some prerequisites about which you can read in the 7.2.3.7 of the [OpenFlow documentation][1].
+> You can see that the match here specifies not only the XMPP port but all the headers in the lower layers of the OSI model (i.e.: `eth_type`, `ipv4_src`, `ip_proto`, `tcp_src`). It is because matching on the TCP destination port has some prerequisites about which you can read in the 7.2.3.7 of the [OpenFlow documentation][1].
 
 * This module should regularly check the statistics/counters of the `FlowEntries` for the particular XMPP connections and decide whether a specified threshold was exceeded (for example let's say we allow only 100 packets/min). If the limit is reached this Controller Module should send blocking `FlowMod` (the action list empty which indicates dropping a packet):
 ```erlang
 handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
-    [IpSrc, TCPSrc] = packet_in_extract([ip_src, tcp_src], PacketIn),
+    [IpSrc, TCPSrc] = packet_in_extract([ipv4_src, tcp_src], PacketIn),
     Matches = [{eth_type, 16#0800},
-               {ip_src, IpSrc},
+               {ipv4_src, IpSrc},
                {ip_proto, <<6>>},
                {tcp_src, TCPSrc},
                {tcp_dst, <<5222:16>>}],
