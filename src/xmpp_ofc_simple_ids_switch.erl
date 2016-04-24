@@ -1,4 +1,4 @@
--module(xmpp_ofc_l2_switch).
+-module(xmpp_ofc_simple_ids_switch).
 -behaviour(gen_server).
 
 %% ------------------------------------------------------------------
@@ -30,13 +30,6 @@
 
 -define(SERVER, ?MODULE).
 -define(OF_VER, 4).
--define(ENTRY_TIMEOUT, 30*1000).
--define(FM_TIMEOUT_S(Type), case Type of
-                                idle ->
-                                    10;
-                                hard ->
-                                    30
-                            end).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -53,11 +46,12 @@ stop(Pid) ->
 
 -spec handle_message(pid(),
                      {MsgType :: term(),
-                      Xid :: term(),
+                      Xid :: term(), 
                       MsgBody :: [tuple()]},
                      [ofp_message()]) -> [ofp_message()].
 handle_message(Pid, Msg, OFMessages) ->
     gen_server:call(Pid, {handle_message, Msg, OFMessages}).
+
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
@@ -66,10 +60,8 @@ handle_message(Pid, Msg, OFMessages) ->
 init([DatapathId]) ->
     {ok, #state{datapath_id = DatapathId, fwd_table = #{}}}.
 
-
 handle_call({handle_message, {packet_in, _, MsgBody} = Msg, CurrOFMesssages},
-            _From, #state{datapath_id = Dpid,
-                          fwd_table = FwdTable0} = State) ->
+            _From, #state{datapath_id = Dpid, fwd_table = FwdTable0} = State) ->
     case xmpp_ofc_util:packet_in_extract(reason, MsgBody) of
         action ->
             {OFMessages, FwdTable1} = handle_packet_in(Msg, Dpid, FwdTable0),
@@ -79,22 +71,17 @@ handle_call({handle_message, {packet_in, _, MsgBody} = Msg, CurrOFMesssages},
             {reply, CurrOFMesssages, State}
     end.
 
-
 handle_cast(_Request, State) ->
     {noreply, State}.
 
-
 handle_info({remove_entry, Dpid, SrcMac},
             #state{fwd_table = FwdTable} = State) ->
-    lager:debug("Removed forwarding entry in ~p: ~p => ~p",
-                [Dpid, xmpp_ofc_util:format_mac(SrcMac), maps:get(SrcMac,
-                                                    FwdTable)]),
+    lager:debug("Removed forwadring endty in ~p: ~p => ~p",
+                [Dpid, xmpp_ofc_util:format_mac(SrcMac), maps:get(SrcMac, FwdTable)]),
     {noreply, State#state{fwd_table = maps:remove(SrcMac, FwdTable)}}.
-
 
 terminate(_Reason, _State) ->
     ok.
-
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -107,62 +94,29 @@ subscriptions() ->
     [packet_in].
 
 init_flow_mod() ->
-    Matches = [],
+    Matches = [{eth_type, 16#0800}, {ip_proto, <<6>>}, {tcp_dst, <<5222:16>>}],
     Instructions = [{apply_actions, [{output, controller, no_buffer}]}],
-    FlowOpts = [{table_id, 0}, {priority, 10},
+    FlowOpts = [{table_id, 0}, {priority, 150},
                 {idle_timeout, 0},
-                {idle_timeout, 0},
-                {cookie, <<0,0,0,0,0,0,0,1>>},
+                {cookie, <<0,0,0,0,0,0,0,150>>},
                 {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
     of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
 
-
-handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
-    FwdTable1  = learn_src_mac_to_port(PacketIn, DatapathId, FwdTable0),
-    case get_port_for_dst_mac(PacketIn, FwdTable0) of
-        undefined ->
-            {[xmpp_ofc_util:packet_out(Xid, PacketIn, flood)], FwdTable1};
-        PortNo ->
-            {[flow_to_dst_mac(PacketIn, PortNo),
-              xmpp_ofc_util:packet_out(Xid, PacketIn, PortNo)],
-             FwdTable1}
-    end.
-
-learn_src_mac_to_port(PacketIn, Dpid, FwdTable0) ->
-    [InPort, SrcMac] = xmpp_ofc_util:packet_in_extract([in_port, src_mac], PacketIn),
-    case maps:get(SrcMac, FwdTable0, undefined) of
-        InPort ->
-            FwdTable0;
-        _ ->
-            FwdTable1 = maps:put(SrcMac, InPort, FwdTable0),
-            schedule_remove_entry(Dpid, SrcMac),
-            lager:debug("Added forwarding entry in ~p: ~p => ~p",
-                        [Dpid, xmpp_ofc_util:format_mac(SrcMac), InPort]),
-            FwdTable1
-    end.
-
-
-get_port_for_dst_mac(PacketIn, FwdTable) ->
-    DstMac = xmpp_ofc_util:packet_in_extract(dst_mac, PacketIn),
-    case maps:find(DstMac, FwdTable) of
-        error ->
-            undefined;
-        {ok, Port} ->
-            Port
-    end.
-
-flow_to_dst_mac(PacketIn, OutPort) ->
-    [InPort, DstMac] = xmpp_ofc_util:packet_in_extract([in_port, dst_mac], PacketIn),
-    Matches = [{in_port, InPort}, {eth_dst, DstMac}],
-    Instructions = [{apply_actions, [{output, OutPort, no_buffer}]}],
-    FlowOpts = [{table_id, 0}, {priority, 100},
-                {idle_timeout, ?FM_TIMEOUT_S(idle)},
-                {idle_timeout, ?FM_TIMEOUT_S(hard)},
-                {cookie, <<0,0,0,0,0,0,0,10>>},
+handle_packet_in({_, Xid, PacketIn}, _, FwdTable0) ->
+    [IpSrc, TCPSrc] = xmpp_ofc_util:packet_in_extract([ipv4_src, tcp_src], PacketIn),
+    Matches = [{eth_type, 16#0800},
+               {ipv4_src, IpSrc},
+               {ip_proto, <<6>>},
+               {tcp_src, TCPSrc},
+               {tcp_dst, <<5222:16>>}],
+    Instructions = [{apply_actions, [{output, 1, no_buffer}]}],
+    FlowOpts = [{table_id, 0}, {priority, 200},
+                {idle_timeout, 30},
+                {cookie, <<0,0,0,0,0,0,0,200>>},
                 {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
-    of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
 
-schedule_remove_entry(SrcMac, Dpid) ->
-    {ok, _Tref} = timer:send_after(?ENTRY_TIMEOUT,
-                                   {remove_entry, Dpid, SrcMac}).
+    FM = of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts),
+    PO = xmpp_ofc_util:packet_out(Xid, PacketIn, 1),
+    {[FM, PO], FwdTable0}.
 
+ 
