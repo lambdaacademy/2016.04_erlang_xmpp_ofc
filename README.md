@@ -5,9 +5,7 @@
 **Table of Contents**
 
 - [xmpp_ofc - XMPP Controller](#xmppofc---xmpp-controller)
-    - [-](#-)
     - [References](#references)
-        - [-](#-)
         - [OTP](#otp)
         - [OpenFlow](#openflow)
     - [Architecture](#architecture)
@@ -35,15 +33,11 @@
         - [See the stats of the controller in graphite](#see-the-stats-of-the-controller-in-graphite)
     - [Task: Simple Intrusion Detections System (Simple IDS)](#task-simple-intrusion-detections-system-simple-ids)
         - [Assumptions](#assumptions)
+        - [Sequence diagram](#sequence-diagram)
         - [TODO](#todo)
 
 <!-- markdown-toc end -->
 
-
-
-###
-
-$ rebar3 compile
 
 ## References ##
 
@@ -638,5 +632,5 @@ handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
 
 ### TODO
 
-- [ ] Add the diagram depicting the simple IDS algorithm
+- [x] Add the diagram depicting the simple IDS algorithm
 - [ ] Add the OF message description for checking the counters of the particular XMPP clients `FlowEntries`
