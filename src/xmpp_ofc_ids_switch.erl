@@ -31,15 +31,16 @@
 
 -define(SERVER, ?MODULE).
 -define(OF_VER, 4).
--define(ENTRY_TIMEOUT, 30 * 1000).
 -define(FM_TIMEOUT_S(Type), case Type of
                                 idle ->
-                                    10;
+                                    30;
                                 hard ->
-                                    30
+                                    60
                             end).
 -define(FM_INIT_COOKIE, <<0,0,0,0,0,0,0,150>>).
-
+-define(FM_COOKIE, <<0,0,0,0,0,0,0,200>>).
+-define(F_STAT_INTERVAL, 10 * 1000).
+-define(PACKETS_THRESH, 30). %% In packets per minute
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -76,12 +77,43 @@ handle_call({handle_message, {packet_in, _, MsgBody} = Msg, CurrOFMessages},
 	    {reply, OFMessages ++ CurrOFMessages, State};
 	_  ->
 	    {reply, CurrOFMessages, State}
+    end;
+
+handle_call({handle_message, {flow_stats_reply, _, MsgBody} = Msg, CurrOFMessages},
+             _From, #state{datapath_id = Dpid} = State) ->
+    case flow_stats_extract(cookie, MsgBody) of
+	?FM_COOKIE ->
+	    IpSrc = flow_stats_extract(ip_src, MsgBody),
+	    TcpSrc = flow_stats_extract(tcp_src, MsgBody),
+	    NPackets = flow_stats_extract(packet_count, MsgBody),
+	    Dur = flow_stats_extract(duration, MsgBody),
+	    %lager:info("Stats for ~p - n_packets: ~p, duration: ~ps",
+	    %	       [pretty_ip_tcp(IpSrc, TcpSrc), NPackets, Dur]),
+	    OFMsgs =
+	        case packets_per_minute(NPackets, Dur) > ?PACKETS_THRESH of
+		    true -> 
+			[drop_flow_mod(TcpSrc, IpSrc)];
+		    _ -> 
+			schedule_flow_stat(TcpSrc, IpSrc, Dpid),
+			[]
+		end,
+	    {reply, OFMsgs ++ CurrOFMessages, State};	    
+	       
+	_ -> 
+	    {reply, CurrOFMessages, State}
     end.
 
 handle_cast(_Request, State) ->
     {noreply, State}.
 
-handle_info(_Request, State) ->
+handle_info({check_stats, Dpid, TcpSrc, IpSrc}, State) ->
+    Matches = [{eth_type, 16#0800},
+	       {ipv4_src, IpSrc},
+	       {ip_proto, <<6>>},
+	       {tcp_src, TcpSrc},
+	       {tcp_dst, <<5222:16>>}],
+    FlowStat = of_msg_lib:get_flow_statistics(?OF_VER, 0, Matches, []),
+    ofs_handler:send(Dpid, FlowStat),
     {noreply, State}.
 
 terminate(_Reason, _State) ->
@@ -95,7 +127,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 
 subscriptions() ->
-    [packet_in].
+    [packet_in, flow_stats_reply].
 
 init_flow_mod() ->
     Matches = [{eth_type, 16#0800}, {ip_proto, <<6>>}, {tcp_dst, <<5222:16>>}],
@@ -107,7 +139,22 @@ init_flow_mod() ->
 	        {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
     of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
 
-handle_packet_in({_, Xid, PacketIn}, _Dpid) ->
+drop_flow_mod(TcpSrc, IpSrc) ->
+    Matches = [{eth_type, 16#0800},
+	       {ipv4_src, IpSrc},
+	       {ip_proto, <<6>>},
+	       {tcp_src, TcpSrc},
+	       {tcp_dst, <<5222:16>>}],
+    Instructions = [{apply_actions, []}],
+    FlowOpts = [{table_id, 0}, {priority, 250},
+	        {idle_timeout, ?FM_TIMEOUT_S(idle)},
+	        {hard_timeout, ?FM_TIMEOUT_S(hard)},
+	        {cookie, <<0,0,0,0,0,0,0,250>>},
+	        {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
+    lager:info("Sending drop flow mod for ~p", [pretty_ip_tcp(IpSrc, TcpSrc)]),
+    of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
+
+handle_packet_in({_, Xid, PacketIn}, Dpid) ->
     [IpSrc, TcpSrc] = packet_in_extract([ip_src, tcp_src], PacketIn),
     Matches = [{eth_type, 16#0800},
 	       {ipv4_src, IpSrc},
@@ -119,10 +166,11 @@ handle_packet_in({_, Xid, PacketIn}, _Dpid) ->
     FlowOpts = [{table_id, 0}, {priority, 200},
 	        {idle_timeout, ?FM_TIMEOUT_S(idle)},
 	        {hard_timeout, ?FM_TIMEOUT_S(hard)},
-	        {cookie, <<0,0,0,0,0,0,0,200>>},
+	        {cookie, ?FM_COOKIE},
 	        {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
     FM = of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts),
     PO = packet_out(Xid, PacketIn, 1),
+    schedule_flow_stat(TcpSrc, IpSrc, Dpid),
     {[FM, PO]}.
 
 packet_out(Xid, PacketIn, OutPort) ->
@@ -136,6 +184,11 @@ packet_out(Xid, PacketIn, OutPort) ->
 	end, 
     PacketOut = of_msg_lib:send_packet(?OF_VER, BIdOrPacketPortion, InPort, Actions),
     PacketOut#ofp_message{xid = Xid}.
+
+schedule_flow_stat(TcpSrc, IpSrc, Dpid) ->
+    {ok, _Tref} = timer:send_after(?F_STAT_INTERVAL, 
+				   {check_stats, 
+				    Dpid, TcpSrc, IpSrc}).
 
 packet_in_extract(Elements, PacketIn) when is_list(Elements) ->
     [packet_in_extract(H, PacketIn) || H <- Elements];
@@ -169,6 +222,24 @@ packet_in_extract(tcp_src, PacketIn) ->
     <<_:OptsLen/bytes, TcpSrc:2/bytes, _/binary>> = RestDgram,
     TcpSrc.
 
+flow_stats_extract(Elements, FlowStats) when is_list(Elements) ->
+    [packet_in_extract(H, FlowStats) || H <- Elements];
+flow_stats_extract(duration, FlowStats) ->
+    proplists:get_value(duration_sec, flow_stats_extract(flows, FlowStats));
+flow_stats_extract(packet_count, FlowStats) ->
+    proplists:get_value(packet_count, flow_stats_extract(flows, FlowStats));
+flow_stats_extract(flows, FlowStats) ->
+    hd(proplists:get_value(flows, FlowStats));
+flow_stats_extract(match, FlowStats) ->
+    proplists:get_value(match, flow_stats_extract(flows, FlowStats));
+flow_stats_extract(ip_src, FlowStats) ->
+    proplists:get_value(ipv4_src, flow_stats_extract(match, FlowStats));
+flow_stats_extract(tcp_src, FlowStats) ->
+    proplists:get_value(tcp_src, flow_stats_extract(match, FlowStats));
+flow_stats_extract(cookie, FlowStats) ->
+    proplists:get_value(cookie, flow_stats_extract(flows, FlowStats)).
+
+
 
 ip_to_list(Ip) when is_binary(Ip) ->
     Result = ["." ++ integer_to_list(X, 10) || <<X:8>> <= Ip],
@@ -180,3 +251,6 @@ tcp_to_list(Tcp) when is_binary(Tcp) ->
 
 pretty_ip_tcp(Ip, Tcp) ->
     ip_to_list(Ip) ++ ":" ++ tcp_to_list(Tcp).
+
+packets_per_minute(N, S) ->
+    N / (S / 60).
