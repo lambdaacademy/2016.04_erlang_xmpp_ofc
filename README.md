@@ -598,8 +598,7 @@ handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
 
 * This module should regularly check the statistics/counters of the `FlowEntries` for the particular XMPP connections and decide whether a specified threshold was exceeded (for example let's say we allow only 100 packets/min). If the limit is reached this Controller Module should send blocking `FlowMod` (the action list empty which indicates dropping a packet):
 ```erlang
-handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
-    [IpSrc, TCPSrc] = packet_in_extract([ipv4_src, tcp_src], PacketIn),
+drop_flow_mod(IpSrc, TCPSrc, DatapathId) ->
     Matches = [{eth_type, 16#0800},
                {ipv4_src, IpSrc},
                {ip_proto, <<6>>},
@@ -611,16 +610,79 @@ handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
                 {hard_timeout, ?FM_TIMEOUT_S(hard)},
                 {cookie, <<0,0,0,0,0,0,0,200>>},
                 {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
-    FM = of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts),
-    PO = packet_out(Xid, PacketIn, 1),
-    {[FM, PO], FwdTable0}.
+    of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts),
 ```
 
 > To read more about actions check 5.12 in the [OpenFlow documentation][1].
 
-[1]: https://www.opennetworking.org/images/stories/downloads/sdn-resources/onf-specifications/openflow/openflow-spec-v1.3.2.pdf
 
+* To check a `FlowEntry` statistics the controller has to send a `FlowStatsRequest`. The switch responds with the `FlowStatsReply` which among others contains `packet_count` and `byte_count` fields. To construct the `FlowStatsRequest` the following code could be used:
 
+```erlang
+send_flow_stats(ClientFlowModCookie, DatapathId) ->
+    Matches = [],
+    TableId = 0,
+    Cookie = ClientFlowModCookie,
+    FlowStats = of_msg_lib:get_flow_statistics(?OF_VER,
+                                               TableId,
+                                               Matches,
+                                               [{cookie, Cookie},
+                                                {cookie_mask, Cookie}]),
+    ofs_handler:send(DatapathId, FlowStats).
+```
+
+The cookie is the same as was used when sending a `FlowMod` for a particular client (see the `handle_packet_in/3` example in the previous point).
+
+> We're breaking an abstraction here as we refer to the ofs_handler:send/2 directly which ties the code to a particular library. We'll likely change it in the nearest future.
+
+> To understand how the cookies mechanism works refer to the 6.4 chapter in the [OpenFlow documentation][1] (specifically check the description of **Modify** and **Delete**. The flow statistics are described in 7.3.5.2 of this document.
+
+The switch responds with `FlowStatsReply` providing that our IDS Controller Module have subscribed to the `flow_stats_reply` message:
+
+```erlang
+subscriptions() ->
+    [packet_in, flow_stats_reply].
+```
+
+An example code handling for the `FlowStatsReply` could look like this:
+
+```erlang
+handle_flow_stats_reply({_, Xid, FlowStatsReply}, DatapathId, FwdTable0) ->
+    [IpSrc, TCPSrc, PacketCount, DurationSec] =
+        flow_stats_extract([ipv4_src,
+                            tcp_src,
+                            packet_count,
+                            duration_sec], FlowStatsReply),
+    case packets_threshold_exceeed(PacketCount, DurationSec) of
+        true ->
+            FM = drop_flow_mod(IpSrc, TCPSrc, DatapathId),
+            FwdTable1 = rememer_drop_flow_mod(FM, FwdTable0),
+            {[FM], FwdTable1};
+        false ->
+            schedule_flow_stats_request(DatapathId, IpSrc, TCPSrc),
+            []
+    end.
+```
+
+> The alternative way of checking a `FlowEntry` stats is through its timers and the `FlowRemoved` message. Check 7.4.2 in the [OpenFlow documentation][1] for more information.
+
+* To be able to periodically check a `FlowEntry` stats we need a mechanism of notifying the IDS Controller Module process to send the `FlowStatsReply` message. One way of achieving it is to schedule sending a message to the IDS CM process:
+
+```erlang
+schedule_flow_stats_request(DatapathId, IpSrc, TCPSrc) ->
+    timer:send_after(?FLOW_STAT_REQUEST_INTERVAL, 
+                     {send_flow_stats_request,
+                      Dpid, TcpSrc, IpSrc}).
+```
+
+After `?FLOW_STAT_REQUEST_INTERVAL` a message `{send_flow_stats_request, Dpid, TcpSrc, IpSrc}` will be delivered to the process and we need `handle_info/2` callback to handle it:
+
+```erlang
+handle_info({send_flow_stats_request, Dpid, TcpSrc, IpSrc}, State) ->
+    %% CHECK THE STATS FOR THE XMPP CLIENT
+    {noreply, State}.
+
+```
 
 ### Sequence diagram
 
@@ -633,4 +695,6 @@ handle_packet_in({_, Xid, PacketIn}, DatapathId, FwdTable0) ->
 ### TODO
 
 - [x] Add the diagram depicting the simple IDS algorithm
-- [ ] Add the OF message description for checking the counters of the particular XMPP clients `FlowEntries`
+- [x] Add the OF message description for checking the counters of the particular XMPP clients `FlowEntries`
+
+[1]: https://www.opennetworking.org/images/stories/downloads/sdn-resources/onf-specifications/openflow/openflow-spec-v1.3.2.pdf
