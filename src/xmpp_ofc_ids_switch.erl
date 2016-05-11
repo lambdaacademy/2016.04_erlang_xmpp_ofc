@@ -6,15 +6,23 @@
 %%% @end
 %%% Created : 25 Apr 2016 by  <Arkadiusz Gil>
 %%%-------------------------------------------------------------------
--module(xmpp_ofc_ids_switch).
 
+%%%%%%%%%%%%%%%%%% TODO %%%%%%%%%%%%%%%%%%%%
+% - check if flow stats entry isn't empty
+% - maybe try to match on flow_removed messages?
+%
+%
+%
+%%%%%%%%%%%%%%%%%% TODO %%%%%%%%%%%%%%%%%%%%
+
+-module(xmpp_ofc_ids_switch).
 -behaviour(gen_server).
 
 %% API exports
 
 -export([start_link/1,
 	 stop/1,
-	 handle_message/3, ip_to_list/1]).
+	 handle_message/3]).
 
 %% gen_server callbacks exports
 
@@ -80,27 +88,13 @@ handle_call({handle_message, {packet_in, _, MsgBody} = Msg, CurrOFMessages},
     end;
 
 handle_call({handle_message, {flow_stats_reply, _, MsgBody} = Msg, CurrOFMessages},
-             _From, #state{datapath_id = Dpid} = State) ->
+	    _From, #state{datapath_id = Dpid} = State) ->
     case flow_stats_extract(cookie, MsgBody) of
-	?FM_COOKIE ->
-	    IpSrc = flow_stats_extract(ip_src, MsgBody),
-	    TcpSrc = flow_stats_extract(tcp_src, MsgBody),
-	    NPackets = flow_stats_extract(packet_count, MsgBody),
-	    Dur = flow_stats_extract(duration, MsgBody),
-	    %lager:info("Stats for ~p - n_packets: ~p, duration: ~ps",
-	    %	       [pretty_ip_tcp(IpSrc, TcpSrc), NPackets, Dur]),
-	    OFMsgs =
-	        case packets_per_minute(NPackets, Dur) > ?PACKETS_THRESH of
-		    true -> 
-			[drop_flow_mod(TcpSrc, IpSrc)];
-		    _ -> 
-			schedule_flow_stat(TcpSrc, IpSrc, Dpid),
-			[]
-		end,
-	    {reply, OFMsgs ++ CurrOFMessages, State};	    
-	       
-	_ -> 
-	    {reply, CurrOFMessages, State}
+    	?FM_COOKIE ->
+	    OFMessages = handle_fs_reply(Msg, Dpid),
+    	    {reply, OFMessages ++ CurrOFMessages, State};	    
+    	_ -> 
+    	    {reply, CurrOFMessages, State}
     end.
 
 handle_cast(_Request, State) ->
@@ -185,6 +179,21 @@ packet_out(Xid, PacketIn, OutPort) ->
     PacketOut = of_msg_lib:send_packet(?OF_VER, BIdOrPacketPortion, InPort, Actions),
     PacketOut#ofp_message{xid = Xid}.
 
+handle_fs_reply({_, _Xid, FlowStats}, Dpid) ->
+    case flow_stats_extract(flows, FlowStats) of
+	[] -> []; % if flows happen to be empty just ignore them
+	_ ->
+	    [IpSrc, TcpSrc, NPackets, Dur] = 
+		flow_stats_extract([ip_src, tcp_src, packet_count, duration], FlowStats),
+    	    case packets_per_minute(NPackets, Dur) > ?PACKETS_THRESH of
+		true -> 
+		    [drop_flow_mod(TcpSrc, IpSrc)];
+		_ -> 
+		    schedule_flow_stat(TcpSrc, IpSrc, Dpid),
+		    []
+	    end
+    end.
+
 schedule_flow_stat(TcpSrc, IpSrc, Dpid) ->
     {ok, _Tref} = timer:send_after(?F_STAT_INTERVAL, 
 				   {check_stats, 
@@ -223,13 +232,17 @@ packet_in_extract(tcp_src, PacketIn) ->
     TcpSrc.
 
 flow_stats_extract(Elements, FlowStats) when is_list(Elements) ->
-    [packet_in_extract(H, FlowStats) || H <- Elements];
+    [flow_stats_extract(H, FlowStats) || H <- Elements];
 flow_stats_extract(duration, FlowStats) ->
     proplists:get_value(duration_sec, flow_stats_extract(flows, FlowStats));
 flow_stats_extract(packet_count, FlowStats) ->
     proplists:get_value(packet_count, flow_stats_extract(flows, FlowStats));
 flow_stats_extract(flows, FlowStats) ->
-    hd(proplists:get_value(flows, FlowStats));
+    Flows = proplists:get_value(flows, FlowStats),
+    case Flows of
+	[] -> [];
+	List -> hd(List)
+    end;
 flow_stats_extract(match, FlowStats) ->
     proplists:get_value(match, flow_stats_extract(flows, FlowStats));
 flow_stats_extract(ip_src, FlowStats) ->
