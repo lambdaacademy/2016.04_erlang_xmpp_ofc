@@ -4,7 +4,8 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([packet_in_extract/2, packet_out/3, format_mac/1]).
+-export([packet_in_extract/2, flow_stats_reply_extract/2,
+         packet_out/3, format_mac/1]).
 
 %% ------------------------------------------------------------------
 %% Includes & Type Definitions & Macros
@@ -46,6 +47,18 @@ packet_in_extract(data, PacketIn) ->
 packet_in_extract(reason, PacketIn) ->
     proplists:get_value(reason, PacketIn).
 
+flow_stats_reply_extract(Elements, FlowStats) when is_list(Elements) ->
+    [flow_stats_reply_extract(H, FlowStats) || H <- Elements];
+flow_stats_reply_extract(duration_sec, FlowStats) ->
+    proplists:get_value(duration_sec, FlowStats);
+flow_stats_reply_extract(packet_count, FlowStats) ->
+    proplists:get_value(packet_count, FlowStats);
+flow_stats_reply_extract(ipv4_src, FlowStats) ->
+    Match = proplists:get_value(match, FlowStats),
+    proplists:get_value(ipv4_src, Match);
+flow_stats_reply_extract(tcp_src, FlowStats) ->
+    Match = proplists:get_value(match, FlowStats),
+    proplists:get_value(tcp_src, Match).
 
 packet_out(Xid, PacketIn, OutPort) ->
     Actions = [{output, OutPort, no_buffer}],
