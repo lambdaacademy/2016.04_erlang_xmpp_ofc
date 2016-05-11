@@ -39,6 +39,11 @@
 <!-- markdown-toc end -->
 
 
+## Running
+Invoke `make shell` to start.
+
+Invoke `make ct` to run tests.
+
 ## References ##
 
 #### General Erlang ####

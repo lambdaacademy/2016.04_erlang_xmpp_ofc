@@ -1,4 +1,4 @@
-.PHONY: compile upgrade clean deep-clean dialyzer shell rel
+.PHONY: compile upgrade clean deep-clean dialyzer shell rel ct
 
 compile: rebar3
 	./rebar3 compile
@@ -27,3 +27,6 @@ rebar3:
 
 rel:
 	./rebar3 release
+
+ct:
+	./rebar3 ct
