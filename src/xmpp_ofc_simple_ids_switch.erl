@@ -70,7 +70,6 @@ stop(Pid) ->
 handle_message(Pid, Msg, OFMessages) ->
     gen_server:call(Pid, {handle_message, Msg, OFMessages}).
 
-
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
@@ -108,7 +107,8 @@ handle_cast(_Request, State) ->
 
 handle_info({request_flow_stats, DatapathId}, State) ->
     lager:info("Called: handle_info()"),
-    request_flow_stats(DatapathId, State#state.parent_pid),
+    GenSwitchPid = State#state.parent_pid,
+    request_flow_stats(DatapathId, GenSwitchPid),
     schedule_request_flow_stats(DatapathId),
     {noreply, State};
 handle_info({remove_entry, Dpid, SrcMac},
@@ -207,14 +207,13 @@ remove_flow_mod(IPSrc, TCPSrc) ->
     lager:info("Removing flow mod: IPSrc: ~p TCPSrc: ~p", [IPSrc, TCPSrc]),
     of_msg_lib:flow_delete(?OF_VER, Matches, FlowOpts).
 
-
 schedule_request_flow_stats(DatapathId) ->
     lager:info("Called: schedule_flow_stats_request()"),
     timer:send_after(?FLOW_STATS_REQUEST_INTERVAL, {request_flow_stats, DatapathId}).
 
-request_flow_stats(DatapathId, ParentPid) ->
+request_flow_stats(DatapathId, GenSwitchPid) ->
     OFMessage = request_flow_stats_message(),
-    ParentPid ! {request_flow_stats, DatapathId, OFMessage}.
+    GenSwitchPid ! {request_flow_stats, DatapathId, OFMessage}.
 
 request_flow_stats_message() ->
     Matches = [{eth_type, ?ETH_TYPE},
