@@ -111,12 +111,7 @@ handle_info({send_flow_stats_request, DatapathId}, State) ->
     lager:info("Called: handle_info()"),
     send_flow_stats_request(DatapathId),
     schedule_flow_stats_request(DatapathId),
-    {noreply, State};
-handle_info({remove_entry, Dpid, SrcMac},
-            #state{fwd_table = FwdTable} = State) ->
-    lager:debug("Removed forwadring endty in ~p: ~p => ~p",
-                [Dpid, xmpp_ofc_util:format_mac(SrcMac), maps:get(SrcMac, FwdTable)]),
-    {noreply, State#state{fwd_table = maps:remove(SrcMac, FwdTable)}}.
+    {noreply, State}.
 
 terminate(_Reason, _State) ->
     ok.
