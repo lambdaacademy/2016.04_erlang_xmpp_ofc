@@ -103,7 +103,10 @@ handle_cast({handle_message, DatapathId, {MsgType, _,  _} = Msg},
 handle_cast(_Request, State) ->
     {noreply, State}.
 
-
+handle_info({request_flow_stats, DatapathId, OFMessage}, State) ->
+    lager:debug("handle_info({request_flow_stats...})"),
+    of_send(DatapathId, [OFMessage]),
+    {noreply, State};
 handle_info(_Request, State) ->
     {noreply, State}.
 
@@ -145,7 +148,7 @@ open_connection(DatapathId, EnabledMods) ->
         lists:foldl(
           fun(Mod, {ModsCfgAcc, MsgTypesAcc, OFMessagesAcc}) ->
                   {ok, Pid, MsgTypes, InitOFMessages} =
-                      Mod:start_link(DatapathId),
+                      Mod:start_link(DatapathId, self()),
                   {
                     [{Mod, Pid, MsgTypes} | ModsCfgAcc],
                     MsgTypes ++ MsgTypesAcc,
