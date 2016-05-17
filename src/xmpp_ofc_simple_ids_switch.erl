@@ -110,6 +110,8 @@ handle_info({request_flow_stats, DatapathId}, State) ->
     GenSwitchPid = State#state.parent_pid,
     request_flow_stats(DatapathId, GenSwitchPid),
     schedule_request_flow_stats(DatapathId),
+    {noreply, State};
+handle_info(_Request, State) ->
     {noreply, State}.
 
 terminate(_Reason, _State) ->
