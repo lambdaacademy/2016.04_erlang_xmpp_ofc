@@ -15,7 +15,7 @@
 %%--------------------------------------------------------------------
 
 init_per_testcase(_TestCase, Config) ->
-    {ok, Pid, _, _} = xmpp_ofc_l2_switch:start_link(?DATAPATH_ID),
+    {ok, Pid, _, _} = xmpp_ofc_l2_switch:start_link(?DATAPATH_ID, self()),
     [{pid, Pid} | Config].
 
 end_per_testcase(_TestCase, Config) ->
@@ -63,5 +63,12 @@ l2_mod_sends_flow_mod(Config) ->
                  (_) -> false
               end, Response2)).
 
-set_packet_in_dst_mac(_, _) -> ok.
-get_packet_in_src_mac(_) -> ok.
+set_packet_in_dst_mac({packet_in, TableId, PacketIn}, NewDSTMac) ->
+    Data = proplists:get_value(data, PacketIn),
+    <<_OldDSTMac:6/bytes, RestOfData/binary>> = Data,
+    NewData = <<NewDSTMac:6/bytes, RestOfData/binary>>,
+    NewPacketIn = lists:keyreplace(data, 1, PacketIn, {data, NewData}),
+    {packet_in, TableId, NewPacketIn}.
+
+get_packet_in_src_mac({packet_in, _TableId, PacketIn}) ->
+    xmpp_ofc_util:packet_in_extract(src_mac, PacketIn).
