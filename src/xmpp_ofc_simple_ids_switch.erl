@@ -5,7 +5,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1,
+-export([start_link/2,
          stop/1,
          handle_message/3]).
 
@@ -26,12 +26,13 @@
 
 -type fwd_table() :: #{MacAddr :: string() => SwitchPort :: integer()}.
 -record(state, {datapath_id :: binary(),
+                parent_pid :: pid(),
                 fwd_table :: fwd_table()}).
 
 -define(SERVER, ?MODULE).
 -define(OF_VER, 4).
 -define(FLOW_STATS_REQUEST_INTERVAL, 1000 * 60).
--define(THRESHOLD, 30/60).
+-define(THRESHOLD, 40/60).
 -define(TCP_DST, <<5222:16>>).
 -define(INIT_COOKIE, <<0,0,0,0,0,0,0,150>>).
 -define(ETH_TYPE, 16#0800).
@@ -52,9 +53,9 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
--spec start_link(binary()) -> {ok, pid()} | ignore | {error, term()}.
-start_link(DatapathId) ->
-    {ok, Pid} = gen_server:start_link(?MODULE, [DatapathId], []),
+-spec start_link(binary(), pid()) -> {ok, pid()} | ignore | {error, term()}.
+start_link(DatapathId, ParentPid) ->
+    {ok, Pid} = gen_server:start_link(?MODULE, [DatapathId, ParentPid], []),
     {ok, Pid, subscriptions(), [init_flow_mod()]}.
 
 -spec stop(pid()) -> ok.
@@ -62,23 +63,20 @@ stop(Pid) ->
     gen_server:stop(Pid).
 
 -spec handle_message(pid(),
-                     {MsgType :: term(),
-                      Xid :: term(), 
-                      MsgBody :: [tuple()]},
-                     [ofp_message()]) -> [ofp_message()].
+                     {MsgType :: term(), Xid :: term(), MsgBody :: [tuple()]},
+                     OFMessages) -> OFMessages when
+                        OFMessages :: [ofp_message() |
+                                      {Timeout :: non_neg_integer(), ofp_message()}].
 handle_message(Pid, Msg, OFMessages) ->
     gen_server:call(Pid, {handle_message, Msg, OFMessages}).
-
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init([DatapathId]) ->
-    %%Maybe this call should belong somewhere else...
-    schedule_flow_stats_request(DatapathId),
-
-    {ok, #state{datapath_id = DatapathId, fwd_table = #{}}}.
+init([DatapathId, ParentPid]) ->
+    schedule_request_flow_stats(DatapathId),
+    {ok, #state{datapath_id = DatapathId, parent_pid = ParentPid, fwd_table = #{}}}.
 
 handle_call({handle_message, {packet_in, _, MsgBody} = Msg, CurrOFMesssages},
             _From, #state{datapath_id = Dpid, fwd_table = FwdTable0} = State) ->
@@ -107,10 +105,13 @@ handle_call({handle_message, {flow_stats_reply, _, MsgBody} = _Msg,
 handle_cast(_Request, State) ->
     {noreply, State}.
 
-handle_info({send_flow_stats_request, DatapathId}, State) ->
+handle_info({request_flow_stats, DatapathId}, State) ->
     lager:info("Called: handle_info()"),
-    send_flow_stats_request(DatapathId),
-    schedule_flow_stats_request(DatapathId),
+    GenSwitchPid = State#state.parent_pid,
+    request_flow_stats(DatapathId, GenSwitchPid),
+    schedule_request_flow_stats(DatapathId),
+    {noreply, State};
+handle_info(_Request, State) ->
     {noreply, State}.
 
 terminate(_Reason, _State) ->
@@ -203,20 +204,20 @@ remove_flow_mod(IPSrc, TCPSrc) ->
     lager:info("Removing flow mod: IPSrc: ~p TCPSrc: ~p", [IPSrc, TCPSrc]),
     of_msg_lib:flow_delete(?OF_VER, Matches, FlowOpts).
 
-
-schedule_flow_stats_request(DatapathId) ->
+schedule_request_flow_stats(DatapathId) ->
     lager:info("Called: schedule_flow_stats_request()"),
-    timer:send_after(?FLOW_STATS_REQUEST_INTERVAL,
-                     {send_flow_stats_request, DatapathId}). 
+    timer:send_after(?FLOW_STATS_REQUEST_INTERVAL, {request_flow_stats, DatapathId}).
 
-send_flow_stats_request(DatapathId) ->
+request_flow_stats(DatapathId, GenSwitchPid) ->
+    OFMessage = request_flow_stats_message(),
+    GenSwitchPid ! {request_flow_stats, DatapathId, OFMessage}.
+
+request_flow_stats_message() ->
     Matches = [{eth_type, ?ETH_TYPE},
                {ip_proto, ?IP_PROTO},
                {tcp_dst, ?TCP_DST}],
     TableId = 0,
-    FlowStats = of_msg_lib:get_flow_statistics(?OF_VER, TableId, Matches,
+    of_msg_lib:get_flow_statistics(?OF_VER, TableId, Matches,
                                                [{cookie, ?COOKIE}, 
-                                                {cookie_mask, ?COOKIE_MASK}]),
-    lager:info("Sending flow stats request."),
-    ofs_handler:send(DatapathId, FlowStats).
-
+                                                {cookie_mask, ?COOKIE_MASK}]).
+ 

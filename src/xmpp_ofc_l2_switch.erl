@@ -5,7 +5,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/1,
+-export([start_link/2,
          stop/1,
          handle_message/3]).
 
@@ -26,6 +26,7 @@
 
 -type fwd_table() :: #{MacAddr :: string() => SwitchPort :: integer()}.
 -record(state, {datapath_id :: binary(),
+                parent_pid :: pid(),
                 fwd_table :: fwd_table()}).
 
 -define(SERVER, ?MODULE).
@@ -42,9 +43,9 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
--spec start_link(binary()) -> {ok, pid()} | ignore | {error, term()}.
-start_link(DatapathId) ->
-    {ok, Pid} = gen_server:start_link(?MODULE, [DatapathId], []),
+-spec start_link(binary(), pid()) -> {ok, pid()} | ignore | {error, term()}.
+start_link(DatapathId, ParentPid) ->
+    {ok, Pid} = gen_server:start_link(?MODULE, [DatapathId, ParentPid], []),
     {ok, Pid, subscriptions(), [init_flow_mod()]}.
 
 -spec stop(pid()) -> ok.
@@ -63,8 +64,8 @@ handle_message(Pid, Msg, OFMessages) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init([DatapathId]) ->
-    {ok, #state{datapath_id = DatapathId, fwd_table = #{}}}.
+init([DatapathId, ParentPid]) ->
+    {ok, #state{datapath_id = DatapathId, parent_pid = ParentPid, fwd_table = #{}}}.
 
 
 handle_call({handle_message, {packet_in, _, MsgBody} = Msg, CurrOFMesssages},
