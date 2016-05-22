@@ -32,11 +32,19 @@
 -define(SERVER, ?MODULE).
 -define(OF_VER, 4).
 -define(ENTRY_TIMEOUT, 30*1000).
+-define(DEFAULT_TABLE_ID, 0).
+-define(INIT_FLOW_PRIORITY, 10).
+-define(INIT_FLOW_MOD_COOKIE, <<0,0,0,0,0,0,0,1>>).
+-define(INIT_FLOW_MOD_COOKIE_MASK, <<0,0,0,0,0,0,0,0>>).
+-define(FLOW_MOD_COOKIE, <<0,0,0,0,0,0,0,10>>).
+-define(FLOW_MOD_COOKIE_MASK, <<0,0,0,0,0,0,0,0>>).
 -define(FM_TIMEOUT_S(Type), case Type of
                                 idle ->
                                     10;
                                 hard ->
-                                    30
+                                    30;
+                                no_timeout ->
+                                    0
                             end).
 
 %% ------------------------------------------------------------------
@@ -110,11 +118,11 @@ subscriptions() ->
 init_flow_mod() ->
     Matches = [],
     Instructions = [{apply_actions, [{output, controller, no_buffer}]}],
-    FlowOpts = [{table_id, 0}, {priority, 10},
-                {idle_timeout, 0},
-                {idle_timeout, 0},
-                {cookie, <<0,0,0,0,0,0,0,1>>},
-                {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
+    FlowOpts = [{table_id, ?DEFAULT_TABLE_ID}, {priority, ?INIT_FLOW_PRIORITY},
+                {idle_timeout, ?FM_TIMEOUT_S(no_timeout)},
+                {idle_timeout, ?FM_TIMEOUT_S(no_timeout)},
+                {cookie, ?INIT_FLOW_MOD_COOKIE},
+                {cookie_mask, ?INIT_FLOW_MOD_COOKIE_MASK}],
     of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
 
 
@@ -156,11 +164,11 @@ flow_to_dst_mac(PacketIn, OutPort) ->
     [InPort, DstMac] = xmpp_ofc_util:packet_in_extract([in_port, dst_mac], PacketIn),
     Matches = [{in_port, InPort}, {eth_dst, DstMac}],
     Instructions = [{apply_actions, [{output, OutPort, no_buffer}]}],
-    FlowOpts = [{table_id, 0}, {priority, 100},
+    FlowOpts = [{table_id, ?DEFAULT_TABLE_ID}, {priority, 100},
                 {idle_timeout, ?FM_TIMEOUT_S(idle)},
                 {idle_timeout, ?FM_TIMEOUT_S(hard)},
-                {cookie, <<0,0,0,0,0,0,0,10>>},
-                {cookie_mask, <<0,0,0,0,0,0,0,0>>}],
+                {cookie, ?FLOW_MOD_COOKIE},
+                {cookie_mask, ?FLOW_MOD_COOKIE_MASK}],
     of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
 
 schedule_remove_entry(SrcMac, Dpid) ->
