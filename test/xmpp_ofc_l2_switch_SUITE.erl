@@ -65,10 +65,22 @@ l2_mod_sends_flow_mod(Config) ->
 
 set_packet_in_dst_mac({packet_in, TableId, PacketIn}, NewDSTMac) ->
     Data = proplists:get_value(data, PacketIn),
-    <<_OldDSTMac:6/bytes, RestOfData/binary>> = Data,
-    NewData = <<NewDSTMac:6/bytes, RestOfData/binary>>,
-    NewPacketIn = lists:keyreplace(data, 1, PacketIn, {data, NewData}),
+    IncompleteData = removeDSTMacFrom(Data),
+    NewData = addNewDSTMacTo(IncompleteData, NewDSTMac),
+    NewPacketIn = createNewPacketIn(PacketIn, NewData),
     {packet_in, TableId, NewPacketIn}.
+
+removeDSTMacFrom(Data) ->
+    <<_OldDSTMac:6/bytes, RestOfData/binary>> = Data,
+    RestOfData.
+
+addNewDSTMacTo(RestOfData, NewDSTMac) ->
+    NewData = <<NewDSTMac:6/bytes, RestOfData/binary>>,
+    NewData.
+
+createNewPacketIn(OldPacketIn, NewData) ->
+    lists:keyreplace(data, 1, OldPacketIn, {data, NewData}).
 
 get_packet_in_src_mac({packet_in, _TableId, PacketIn}) ->
     xmpp_ofc_util:packet_in_extract(src_mac, PacketIn).
+
