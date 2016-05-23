@@ -37,6 +37,7 @@
 -define(INIT_COOKIE, <<0,0,0,0,0,0,0,150>>).
 -define(ETH_TYPE, 16#0800).
 -define(IP_PROTO, <<6>>).
+-define(DEFAULT_TABLE_ID, 0).
 -define(INIT_FLOW_PRIORITY, 150).
 -define(FLOW_PRIORITY, 200).
 -define(FLOW_DROP_PRIORITY, 300).
@@ -130,8 +131,8 @@ subscriptions() ->
 init_flow_mod() ->
     Matches = [{eth_type, ?ETH_TYPE}, {ip_proto, ?IP_PROTO}, {tcp_dst, ?TCP_DST}],
     Instructions = [{apply_actions, [{output, controller, no_buffer}]}],
-    FlowOpts = [{table_id, 0}, {priority, ?INIT_FLOW_PRIORITY},
-                {idle_timeout, 0},
+    FlowOpts = [{table_id, ?DEFAULT_TABLE_ID}, {priority, ?INIT_FLOW_PRIORITY},
+                {idle_timeout, ?FM_TIMEOUT_S(idle)},
                 {cookie, ?INIT_COOKIE},
                 {cookie_mask, ?COOKIE_MASK}],
     of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
@@ -144,8 +145,8 @@ handle_packet_in({_, Xid, PacketIn}, _, FwdTable0) ->
                {tcp_src, TCPSrc},
                {tcp_dst, ?TCP_DST}],
     Instructions = [{apply_actions, [{output, 1, no_buffer}]}],
-    FlowOpts = [{table_id, 0}, {priority, ?FLOW_PRIORITY},
-                {idle_timeout, 30},
+    FlowOpts = [{table_id, ?DEFAULT_TABLE_ID}, {priority, ?FLOW_PRIORITY},
+                {idle_timeout, ?FM_TIMEOUT_S(idle)},
                 {cookie, ?COOKIE},
                 {cookie_mask, ?COOKIE_MASK}],
 
@@ -182,7 +183,7 @@ drop_flow_mod(IPSrc, TCPSrc) ->
                {tcp_src, TCPSrc},
                {tcp_dst, ?TCP_DST}],
     Instructions = [{apply_actions, []}],
-    FlowOpts = [{table_id, 0}, {priority, ?FLOW_DROP_PRIORITY},
+    FlowOpts = [{table_id, ?DEFAULT_TABLE_ID}, {priority, ?FLOW_DROP_PRIORITY},
                 {idle_timeout, ?FM_TIMEOUT_S(idle)},
                 {hard_timeout, ?FM_TIMEOUT_S(hard)},
                 {cookie, ?COOKIE},
@@ -196,7 +197,7 @@ remove_flow_mod(IPSrc, TCPSrc) ->
                {ip_proto, ?IP_PROTO},
                {tcp_src, TCPSrc},
                {tcp_dst, ?TCP_DST}],
-    FlowOpts = [{table_id, 0}, {priority, ?FLOW_PRIORITY},
+    FlowOpts = [{table_id, ?DEFAULT_TABLE_ID}, {priority, ?FLOW_PRIORITY},
                 {idle_timeout, ?FM_TIMEOUT_S(idle)},
                 {hard_timeout, ?FM_TIMEOUT_S(hard)},
                 {cookie, ?COOKIE},
@@ -216,7 +217,7 @@ request_flow_stats_message() ->
     Matches = [{eth_type, ?ETH_TYPE},
                {ip_proto, ?IP_PROTO},
                {tcp_dst, ?TCP_DST}],
-    TableId = 0,
+    TableId = ?DEFAULT_TABLE_ID,
     of_msg_lib:get_flow_statistics(?OF_VER, TableId, Matches,
                                                [{cookie, ?COOKIE}, 
                                                 {cookie_mask, ?COOKIE_MASK}]).
