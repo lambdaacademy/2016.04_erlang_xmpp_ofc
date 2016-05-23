@@ -47,7 +47,9 @@
                                 idle ->
                                     30;
                                 hard ->
-                                    120
+                                    120;
+                                no_timeout ->
+                                    0
                             end).
 
 %% ------------------------------------------------------------------
@@ -132,7 +134,7 @@ init_flow_mod() ->
     Matches = [{eth_type, ?ETH_TYPE}, {ip_proto, ?IP_PROTO}, {tcp_dst, ?TCP_DST}],
     Instructions = [{apply_actions, [{output, controller, no_buffer}]}],
     FlowOpts = [{table_id, ?DEFAULT_TABLE_ID}, {priority, ?INIT_FLOW_PRIORITY},
-                {idle_timeout, ?FM_TIMEOUT_S(idle)},
+                {idle_timeout, ?FM_TIMEOUT_S(no_timeout)},
                 {cookie, ?INIT_COOKIE},
                 {cookie_mask, ?COOKIE_MASK}],
     of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
