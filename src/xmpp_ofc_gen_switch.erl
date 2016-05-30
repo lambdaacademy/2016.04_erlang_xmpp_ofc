@@ -35,6 +35,13 @@
 -define(EXO_SWITCHES_CNT, [counters, switches]).
 -define(EXO_OF_MESSAGES_RECEIVED, [counters, of_messages_received]).
 -define(EXO_OF_MESSAGES_SENT, [counters, of_messages_sent]).
+%% TODO: Extract metric names to an .hrl file
+-define(EXO_IDS_MONITORED_CLIENTS,
+        [counters, simple_ids, monitored_clients]).
+-define(EXO_IDS_BLOCKED_CLIENTS,
+        [counters, simple_ids, blocked_clients]).
+-define(EXO_IDS_UNBLOCKED_CLIENTS,
+        [counters, simple_ids, unblocked_clients]).
 
 
 %% ------------------------------------------------------------------
@@ -128,7 +135,10 @@ init_exometer() ->
     Metrics =
         [{?EXO_SWITCHES_CNT, counter, [value], 10000},
          {?EXO_OF_MESSAGES_RECEIVED, spiral, [one, count], 10000},
-         {?EXO_OF_MESSAGES_SENT, spiral, [one, count], 10000}],
+         {?EXO_OF_MESSAGES_SENT, spiral, [one, count], 10000},
+         {?EXO_IDS_MONITORED_CLIENTS, spiral, [one, count], 10000},
+         {?EXO_IDS_BLOCKED_CLIENTS, spiral, [one, count], 10000},
+         {?EXO_IDS_UNBLOCKED_CLIENTS, spiral, [one, count], 10000}],
     %% spiral: sum of values reported withing given time span
     [ok = init_exometer_graphite_metrics(Name,
                                          Type,
