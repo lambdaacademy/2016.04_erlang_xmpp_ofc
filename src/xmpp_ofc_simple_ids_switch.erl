@@ -51,6 +51,13 @@
                                 no_timeout ->
                                     0
                             end).
+%% TODO: Extract metric names to an .hrl file
+-define(EXO_IDS_MONITORED_CLIENTS,
+        [counters, simple_ids, monitored_clients]).
+-define(EXO_IDS_BLOCKED_CLIENTS,
+        [counters, simple_ids, blocked_clients]).
+-define(EXO_IDS_UNBLOCKED_CLIENTS,
+        [counters, simple_ids, unblocked_clients]).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -154,6 +161,7 @@ handle_packet_in({_, Xid, PacketIn}, _, FwdTable0) ->
 
     FM = of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts),
     PO = xmpp_ofc_util:packet_out(Xid, PacketIn, 1),
+    exometer:update(?EXO_IDS_MONITORED_CLIENTS, 1),
     {[FM, PO], FwdTable0}.
 
 handle_flow_entry_stats(FlowEntry, Acc) ->
@@ -164,7 +172,8 @@ handle_flow_entry_stats(FlowEntry, Acc) ->
         true ->
             {FlowMods, FwdTable0, Dpid} = Acc,
             FM1 = drop_flow_mod(IPSrc, TCPSrc),
-            FM2 = remove_flow_mod(IPSrc, TCPSrc), 
+            FM2 = remove_flow_mod(IPSrc, TCPSrc),
+            exometer:update(?EXO_IDS_BLOCKED_CLIENTS, 1),
             {[FM2, FM1] ++ FlowMods, FwdTable0, Dpid};
         false ->
             Acc
@@ -223,4 +232,3 @@ request_flow_stats_message() ->
     of_msg_lib:get_flow_statistics(?OF_VER, TableId, Matches,
                                                [{cookie, ?COOKIE}, 
                                                 {cookie_mask, ?COOKIE_MASK}]).
- 
