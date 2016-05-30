@@ -31,6 +31,7 @@
         - [Clone the controller, and install it](#clone-the-controller-and-install-it)
         - [See the switch forwarding table](#see-the-switch-forwarding-table)
         - [See the stats of the controller in graphite](#see-the-stats-of-the-controller-in-graphite)
+        - [See the stats of the controller in graphana](#see-the-stats-of-the-controller-in-graphana)
     - [Task: Simple Intrusion Detections System (Simple IDS)](#task-simple-intrusion-detections-system-simple-ids)
         - [Assumptions](#assumptions)
         - [Sequence diagram](#sequence-diagram)
@@ -559,6 +560,24 @@ cookie=0xa, duration=281.905s, table=0, n_packets=4105, n_bytes=628898, idle_tim
 
 ![alt](img/xmpp_ofc_graphite.png)
 
+### See the stats of the controller in graphana
+
+![alt](img/xmpp_ofc_graphana.png)
+
+The graphana dashboard has the following graphs:
+* "Connections setups/failures/10s" - shows how many connections
+were setup/failed in the last 10 seconds
+* "Amoc users" - shows the number of the generated Amoc users
+* Amoc Users Messages/10s - show how many messages were sent/received
+by Amoc users in total in the last 10 seconds; if everything is balanced
+the two lines should be equal; if a client gets blocked less messages are
+delivered in a given time slot
+* "XMPP Messages TTD" - TTD stands for Time To Deliver and presents a histogram
+of the times related to delivering the messages
+* "xmpp_ofc of messages/10s" - shows the number of OpenFlow messages sent/received
+by the controller in the last 10 seconds
+* "Monitored/Blocked users in the last minute" - shows the number of users that
+the controller started monitoring/blocking in the last 10 seconds
 
 ## Task: Simple Intrusion Detections System (Simple IDS)
 
@@ -695,11 +714,5 @@ handle_info({send_flow_stats_request, Dpid, TcpSrc, IpSrc}, State) ->
 
 ![alt](https://www.websequencediagrams.com/cgi-bin/cdraw?lz=dGl0bGUgU2ltcGxlIFhNUFAgSW50cnVzaW9uIERldGVjdGlvbiBTeXN0ZW0KCnBhcnRpY2lwYW50IFNXSVRDSAAGDUxPT00AFw1JRFMKCgAjBiAtPgAbBTogY29ubmVjdApMT09NIC0-IElEUzogaW5pdGlhbGl6ZSBJRFMgZm9yIG5ldyBzd2l0Y2gKSURTIC0AOAlzZW5kACkIIEZsb3ctTW9kIGNhcHR1cmluZyBhbGwAgUUGZGF0YWdyYW1zXG5hbmQAMgZ0aGVtIHRvIHRoZSBjb250cm9sbGVyAFIQdWJzY3JpYmUgdG8gUGFja2V0LUlucyB0cmlnZ2VyZCBieQA8BQB5DE1vZACBTActPgCCFgcAgSQHABYICm5vdGUgb3ZlcgCCNgcsOiAKRnJvbSBub3cgb24AgQ8FAIFsBiBoYXMAgVUGRW50cnkKAIFTCnAAgQkFcyBkZXN0aW5lZCB0byA1MjIyClRDUCBwb3J0IG9uIFgAPwgADAV3aGljaCB0aGUKc2VydmVyIGlzIGF0dGFjaAA6BQplbmQgbm90ZQCDGRIAgXIJIHdpdGgAgkcOXG5mcm9tIHVua25vd24AhDYGY2xpZW50IEEAg04OAII4CQCDQgYAg2sHSQCDaApsb2dpYwCDbwV0aACEfwcAQQkAJwxwcmVwYXJlIGEAg14Yc3Vic2VxdWVudFxuWE1NUCB0cmFmZmljIACBJgUAgRYIIACEBAlpdACEAwgAhXYFAIIZBgCEXw90aGUAhFwJAINGGwAaBQCDMjB0aGUKAIU8DQCDaQUAgRsFYQCFewVvbmUAg1gkAIFRDnRoYXQAhDwFaGlnaGVyIHByaW9yaXR5AINUFQCFHQ0AgicIAIgEBQCCNQcAg2EHQwCDVAdcbgCCHxMAg1EIAIdbBmdldCBzdGF0aXN0aWNzIG9mAIZoBQA5CACHLQUgAIVRBgCHewgAhicIZ2V0AIV_BgA1CQCINQkAgwMNABULAIZqCQCIQgUALg8KYWwASwYAhjAGIGNvdW50ZXIgYWJvdmUAh34FYWxsb3dlZCB0aHJlc2hvbGQKICAAiH0FAIhgDgCIXQlkZWxldACHAwVyZXZpb3UAhyAGAIMxBmZvcgCCHgkAJyByb3BwaW5nAIJdDQCFIAYANg0AghEQAIRhDmVuZA&s=roundgreen)
 
-
-
-### TODO
-
-- [x] Add the diagram depicting the simple IDS algorithm
-- [x] Add the OF message description for checking the counters of the particular XMPP clients `FlowEntries`
 
 [1]: https://www.opennetworking.org/images/stories/downloads/sdn-resources/onf-specifications/openflow/openflow-spec-v1.3.2.pdf
