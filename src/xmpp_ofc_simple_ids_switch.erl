@@ -199,7 +199,8 @@ drop_flow_mod(IPSrc, TCPSrc) ->
                 {hard_timeout, ?FM_TIMEOUT_S(hard)},
                 {cookie, ?COOKIE},
                 {cookie_mask, ?COOKIE_MASK}],
-    lager:info("Adding flow mod. DROP_ALL. IPSrc: ~p TCPSrc: ~p", [IPSrc, TCPSrc]),
+    lager:info("Adding flow mod. DROP_ALL. IPSrc: ~s TCPSrc: ~s",
+        [xmpp_ofc_util:format_ip(IPSrc), xmpp_ofc_util:format:tcp(TCPSrc)]),
     of_msg_lib:flow_add(?OF_VER, Matches, Instructions, FlowOpts).
 
 remove_flow_mod(IPSrc, TCPSrc) ->
@@ -213,7 +214,8 @@ remove_flow_mod(IPSrc, TCPSrc) ->
                 {hard_timeout, ?FM_TIMEOUT_S(hard)},
                 {cookie, ?COOKIE},
                 {cookie_mask, ?COOKIE_MASK}],
-    lager:info("Removing flow mod: IPSrc: ~p TCPSrc: ~p", [IPSrc, TCPSrc]),
+    lager:info("Removing flow mod: IPSrc: ~s TCPSrc: ~s",
+        [xmpp_ofc_util:format_ip(IPSrc), xmpp_ofc_util:format:tcp(TCPSrc)]),
     of_msg_lib:flow_delete(?OF_VER, Matches, FlowOpts).
 
 schedule_request_flow_stats(DatapathId) ->

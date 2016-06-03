@@ -5,7 +5,7 @@
 %% ------------------------------------------------------------------
 
 -export([packet_in_extract/2, flow_stats_reply_extract/2,
-         packet_out/3, format_mac/1]).
+         packet_out/3, format_mac/1, format_ip/1, format_tcp/1]).
 
 %% ------------------------------------------------------------------
 %% Includes & Type Definitions & Macros
@@ -77,3 +77,9 @@ format_mac(MacBin) ->
     Mac0 = [":" ++ integer_to_list(X, 16) || <<X>> <= MacBin],
     tl(lists:flatten(Mac0)).
 
+format_ip(IP) ->
+    IP1 = ["."++integer_to_list(X) || <<X>> <= IP ],
+    tl(lists:flatten(IP1)).
+
+format_tcp(<<B2:8,B1:8>>) ->
+    integer_to_list(B2 bsl 8 + B1).
